@@ -25,9 +25,9 @@ function saveDatabase() {
   fs.writeFileSync(DATA_FILE, JSON.stringify(lottoDatabase, null, 2));
 }
 
-function formatTimestamp(isoString) {
-  if (!isoString) return '';
-  const d = new Date(isoString);
+// Generates the current live date and time when listing is triggered
+function getLiveTimestamp() {
+  const d = new Date();
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = String(d.getFullYear()).slice(-2);
@@ -58,20 +58,22 @@ bot.start((ctx) => {
 async function sendFullList(tgBotInstance, targetChatId) {
   const TOTAL_NUMBERS = 3000;
   const BATCH_SIZE = 50;
+  const liveDate = getLiveTimestamp(); // Gets the exact listing time once
   
   for (let start = 1; start <= TOTAL_NUMBERS; start += BATCH_SIZE) {
     let end = Math.min(start + BATCH_SIZE - 1, TOTAL_NUMBERS);
-    let batchText = `💥 *${start} ➡️ ${end}* 💥\n\n`;
+    
+    // Placed the date and time right at the top header of each 50 batch!
+    let batchText = `💥 *${start} ➡️ ${end}*  🕒 _Generated: ${liveDate}_ 💥\n\n`;
     
     for (let i = start; i <= end; i++) {
       const numStr = String(i);
       if (lottoDatabase[numStr]) {
         const phone = lottoDatabase[numStr].phone || '0000000000';
         const hiddenPhone = phone.length > 2 ? phone.slice(0, -2) + 'XX' : 'XX';
-        const dateStr = formatTimestamp(lottoDatabase[numStr].timestamp);
         
-        // Output structure: Number >>> Phone [Timestamp] >>> ✅
-        batchText += `🔴 *${numStr}* ⏩ \`${hiddenPhone}\` ${dateStr} >>> ✅\n`;
+        // Removed individual timestamps from here to stay neat
+        batchText += `🔴 *${numStr}* ⏩ \`${hiddenPhone}\` >>> ✅\n`;
       } else {
         batchText += `🟢 *${numStr}* ⏩ \`⚡ Available\` ✨\n`;
       }
@@ -225,7 +227,7 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// 3. SECURE STARTUP ORDER (Express starts first to satisfy Render's health port, then Telegram triggers)
+// 3. SECURE STARTUP ORDER
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.get('/', (req, res) => res.send('Car Lotto Bot Status: Active'));
