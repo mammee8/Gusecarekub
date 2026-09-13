@@ -4,9 +4,18 @@ const fs = require('fs');
 const path = require('path');
 
 // ==========================================
-// TARGET CHAT CONFIGURATION
+// TARGET CHAT & ADMIN CONFIGURATION
 // ==========================================
 const TELEGRAM_GROUP_ID = '-5348442720'; 
+
+// System Administrator Telegram User IDs
+const ADMIN_IDS = [
+  761311225 // Your Admin Telegram User ID
+];
+
+function isAdmin(userId) {
+  return ADMIN_IDS.includes(userId) || ADMIN_IDS.includes(Number(userId));
+}
 
 // 1. FILE PERSISTENCE ENGINE
 const DATA_FILE = path.join(__dirname, 'lotto_data.json');
@@ -40,18 +49,28 @@ function getLiveTimestamp() {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const userSessions = {};
 
-// Color-coded tab layouts
-const mainKeyboard = Markup.keyboard([
+// Full Admin Keyboard (All 5 options)
+const adminKeyboard = Markup.keyboard([
   ['🔍 Check Number', '🎟️ Reserve Number'],
   ['📋 List 3,000 Numbers'],
   ['❌ Release Number', '📊 Lotto Status Chart']
 ]).resize();
 
-const greetingText = `🏎️💨 *WELCOME TO THE PREMIUM CAR LOTTERY MANAGEMENT SYSTEM* 💨🏎️\n\n` +
-                       `✨ _Tap a colorful command tab below to control the live system:_ ✨`;
+// Public/Individual User Keyboard (Restricted to Check & List)
+const userKeyboard = Markup.keyboard([
+  ['🔍 Check Number', '📋 List 3,000 Numbers']
+]).resize();
+
+// Helper to deliver the correct menu depending on user role
+function getMenuKeyboard(userId) {
+  return isAdmin(userId) ? adminKeyboard : userKeyboard;
+}
+
+const greetingText = `🏎️💨 *WELCOME TO THE PREMIUM CAR LOTTERY SYSTEM* 💨🏎️\n\n` +
+                       `✨ _Tap a command tab below to interact with the system:_ ✨`;
 
 bot.start((ctx) => {
-  ctx.replyWithMarkdown(greetingText, mainKeyboard);
+  ctx.replyWithMarkdown(greetingText, getMenuKeyboard(ctx.from.id));
 });
 
 // Master generator for sending all 3000 entries efficiently
@@ -63,7 +82,7 @@ async function sendFullList(tgBotInstance, targetChatId) {
   for (let start = 1; start <= TOTAL_NUMBERS; start += BATCH_SIZE) {
     let end = Math.min(start + BATCH_SIZE - 1, TOTAL_NUMBERS);
     
-    // Placed the date and time right at the top header of each 50 batch!
+    // Header for each 50-batch
     let batchText = `💥 *${start} ➡️ ${end}*  🕒 _Generated: ${liveDate}_ 💥\n\n`;
     
     for (let i = start; i <= end; i++) {
@@ -72,7 +91,6 @@ async function sendFullList(tgBotInstance, targetChatId) {
         const phone = lottoDatabase[numStr].phone || '0000000000';
         const hiddenPhone = phone.length > 2 ? phone.slice(0, -2) + 'XX' : 'XX';
         
-        // Removed individual timestamps from here to stay neat
         batchText += `🔴 *${numStr}* ⏩ \`${hiddenPhone}\` >>> ✅\n`;
       } else {
         batchText += `🟢 *${numStr}* ⏩ \`⚡ Available\` ✨\n`;
@@ -88,19 +106,22 @@ async function sendFullList(tgBotInstance, targetChatId) {
   }
 }
 
-// --- TAB 1: CHECK NUMBER ---
+// --- TAB 1: CHECK NUMBER (Public) ---
 bot.hears('🔍 Check Number', (ctx) => {
-  ctx.reply('🔎 *Scanning Input...* Please type the Number you want to check (1-3000):', { parse_mode: 'Markdown' });
+  ctx.reply('🔎 *Scanning Input...* Please type the Number you want to check (1-3000):', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
   userSessions[ctx.from.id] = { action: 'CHECK_NUMBER' };
 });
 
-// --- TAB 2: RESERVE NUMBER ---
+// --- TAB 2: RESERVE NUMBER (Admin Only) ---
 bot.hears('🎟️ Reserve Number', (ctx) => {
-  ctx.reply('🛠️ *Booking Configuration started.*\n\n🚩 *Step [1 / 4]:* Enter the desired Number (1-3000):', { parse_mode: 'Markdown' });
+  if (!isAdmin(ctx.from.id)) {
+    return ctx.reply('⛔ *ACCESS DENIED:* Only system administrators can reserve numbers.', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  }
+  ctx.reply('🛠️ *Booking Configuration started.*\n\n🚩 *Step [1 / 4]:* Enter the desired Number (1-3000):', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
   userSessions[ctx.from.id] = { action: 'RESERVE_STEP_NUMBER' };
 });
 
-// --- TAB 3: LIST NUMBERS ---
+// --- TAB 3: LIST NUMBERS (Public) ---
 bot.hears('📋 List 3,000 Numbers', async (ctx) => {
   const processMsg = await ctx.reply('⏳ *Initializing live layout engine...* 0%');
   setTimeout(() => ctx.telegram.editMessageText(ctx.chat.id, processMsg.message_id, null, '⚡ *Processing 3,000 database entities...* 45%', { parse_mode: 'Markdown' }).catch(()=>{}), 400);
@@ -109,17 +130,24 @@ bot.hears('📋 List 3,000 Numbers', async (ctx) => {
 
   await new Promise(resolve => setTimeout(resolve, 1250));
   await sendFullList(bot, ctx.chat.id);
-  ctx.reply('🏁 *All 3,000 entries have been mapped perfectly.* 🔥', mainKeyboard, { parse_mode: 'Markdown' });
+  ctx.reply('🏁 *All 3,000 entries have been mapped perfectly.* 🔥', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
 });
 
-// --- TAB 4: RELEASE NUMBER ---
+// --- TAB 4: RELEASE NUMBER (Admin Only) ---
 bot.hears('❌ Release Number', (ctx) => {
-  ctx.reply('⚙️ *Database Eraser Active...*\n\nType the locked Number you want to completely wipe out and release:', { parse_mode: 'Markdown' });
+  if (!isAdmin(ctx.from.id)) {
+    return ctx.reply('⛔ *ACCESS DENIED:* Only system administrators can release numbers.', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  }
+  ctx.reply('⚙️ *Database Eraser Active...*\n\nType the locked Number you want to completely wipe out and release:', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
   userSessions[ctx.from.id] = { action: 'RELEASE_NUMBER' };
 });
 
-// --- TAB 5: LOTTO STATUS CHART ---
+// --- TAB 5: LOTTO STATUS CHART (Admin Only) ---
 bot.hears('📊 Lotto Status Chart', (ctx) => {
+  if (!isAdmin(ctx.from.id)) {
+    return ctx.reply('⛔ *ACCESS DENIED:* Only system administrators can view system status metrics.', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  }
+
   const totalNumbers = 3000;
   const reservedCount = Object.keys(lottoDatabase).length;
   const availableCount = totalNumbers - reservedCount;
@@ -136,7 +164,7 @@ bot.hears('📊 Lotto Status Chart', (ctx) => {
                      `🟢 Total Vacant: *${availableCount} Slots*\n` +
                      `💎 Pool Size: *${totalNumbers} Options*`;
 
-  ctx.replyWithMarkdown(statusText, mainKeyboard);
+  ctx.replyWithMarkdown(statusText, getMenuKeyboard(ctx.from.id));
 });
 
 // --- TEXT INPUT ROUTING INTERCEPTOR ---
@@ -145,21 +173,35 @@ bot.on('text', async (ctx) => {
   const session = userSessions[userId];
   const text = ctx.message.text.trim();
 
-  if (!session) return;
+  // If a regular user sends text that isn't a session action, refresh their keyboard
+  if (!session) {
+    // Block admin commands if typed directly as raw text by non-admins
+    if (['🎟️ Reserve Number', '❌ Release Number', '📊 Lotto Status Chart'].includes(text) && !isAdmin(userId)) {
+      return ctx.reply('⛔ *ACCESS DENIED:* Only system administrators can use this option.', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
+    }
+    return;
+  }
 
   const numCheck = parseInt(text);
   if ((session.action === 'CHECK_NUMBER' || session.action === 'RESERVE_STEP_NUMBER' || session.action === 'RELEASE_NUMBER') && (isNaN(numCheck) || numCheck < 1 || numCheck > 3000)) {
-    ctx.reply('⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and 3000. Session cleared.', mainKeyboard, { parse_mode: 'Markdown' });
+    ctx.reply('⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and 3000. Session cleared.', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     delete userSessions[userId];
     return;
   }
 
   if (session.action === 'CHECK_NUMBER') {
     if (lottoDatabase[text]) {
-      ctx.reply(`🔒 *STATUS CHECK:* Number *${text}* is already *TAKEN & LOCKED*!`, mainKeyboard, { parse_mode: 'Markdown' });
+      ctx.reply(`🔒 *STATUS CHECK:* Number *${text}* is already *TAKEN & LOCKED*!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     } else {
-      ctx.reply(`⚡ *STATUS CHECK:* Number *${text}* is 🌟 *AVAILABLE NOW* 🌟!`, mainKeyboard, { parse_mode: 'Markdown' });
+      ctx.reply(`⚡ *STATUS CHECK:* Number *${text}* is 🌟 *AVAILABLE NOW* 🌟!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     }
+    delete userSessions[userId];
+    return;
+  }
+
+  // Double-check admin privileges before executing sensitive workflow steps
+  if ((session.action === 'RELEASE_NUMBER' || session.action.startsWith('RESERVE_STEP')) && !isAdmin(userId)) {
+    ctx.reply('⛔ *ACCESS DENIED:* Unauthorized action attempt.', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     delete userSessions[userId];
     return;
   }
@@ -168,9 +210,9 @@ bot.on('text', async (ctx) => {
     if (lottoDatabase[text]) {
       delete lottoDatabase[text];
       saveDatabase();
-      ctx.reply(`✨ *WIPE COMPLETE:* Number *${text}* has broken out of its reservation and is open!`, mainKeyboard, { parse_mode: 'Markdown' });
+      ctx.reply(`✨ *WIPE COMPLETE:* Number *${text}* has broken out of its reservation and is open!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     } else {
-      ctx.reply(`⚠️ *NOTICE:* Number *${text}* was already completely vacant.`, mainKeyboard, { parse_mode: 'Markdown' });
+      ctx.reply(`⚠️ *NOTICE:* Number *${text}* was already completely vacant.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     }
     delete userSessions[userId];
     return;
@@ -178,26 +220,26 @@ bot.on('text', async (ctx) => {
 
   if (session.action === 'RESERVE_STEP_NUMBER') {
     if (lottoDatabase[text]) {
-      ctx.reply(`❌ *DENIED:* Sorry, Slot *${text}* is completely taken. Wizard cancelled.`, mainKeyboard, { parse_mode: 'Markdown' });
+      ctx.reply(`❌ *DENIED:* Sorry, Slot *${text}* is completely taken. Wizard cancelled.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
       delete userSessions[userId];
       return;
     }
     userSessions[userId] = { action: 'RESERVE_STEP_NAME', targetNumber: text };
-    ctx.reply(`👤 *Step [2 / 4]:* Enter the customer's *Full Name* for Ticket *#${text}*:`, { parse_mode: 'Markdown' });
+    ctx.reply(`👤 *Step [2 / 4]:* Enter the customer's *Full Name* for Ticket *#${text}*:`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     return;
   }
 
   if (session.action === 'RESERVE_STEP_NAME') {
     session.name = text;
     session.action = 'RESERVE_STEP_PHONE';
-    ctx.reply('📞 *Step [3 / 4]:* Please submit their *Phone Number*:', { parse_mode: 'Markdown' });
+    ctx.reply('📞 *Step [3 / 4]:* Please submit their *Phone Number*:', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     return;
   }
 
   if (session.action === 'RESERVE_STEP_PHONE') {
     session.phone = text;
     session.action = 'RESERVE_STEP_ADDRESS';
-    ctx.reply('📍 *Step [4 / 4]:* Final step! Provide their *Full Delivery Address*:', { parse_mode: 'Markdown' });
+    ctx.reply('📍 *Step [4 / 4]:* Final step! Provide their *Full Delivery Address*:', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     return;
   }
 
@@ -210,7 +252,7 @@ bot.on('text', async (ctx) => {
       timestamp: new Date().toISOString()
     };
     saveDatabase();
-    ctx.reply(`🎉 *BOOKING CONCLUDED!* Ticket *#${target}* successfully secured for *${session.name}*!`, mainKeyboard, { parse_mode: 'Markdown' });
+    ctx.reply(`🎉 *BOOKING CONCLUDED!* Ticket *#${target}* successfully secured for *${session.name}*!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
     
     const currentReservedCount = Object.keys(lottoDatabase).length;
     if (currentReservedCount > 0 && currentReservedCount % 10 === 0) {
