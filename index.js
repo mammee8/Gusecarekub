@@ -57,14 +57,14 @@ function getLiveTimestamp() {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const userSessions = {};
 
-// Admin Keyboard layout (Full Access to All 6 Tabs)
+// Admin Keyboard layout
 const adminKeyboard = Markup.keyboard([
   ['🔍 Check Number', '🎟️ Reserve Number'],
   ['📋 List 3,500 Numbers', '📜 Reserved List'],
   ['❌ Release Number', '📊 Lotto Status Chart']
 ]).resize();
 
-// Public/Individual User Keyboard layout (Restricted Access)
+// Public/Individual User Keyboard layout
 const userKeyboard = Markup.keyboard([
   ['🔍 Check Number', '📋 List 3,500 Numbers']
 ]).resize();
@@ -84,7 +84,7 @@ function formatDate(isoString) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Helper to clean up previous group posts before posting new list
+// Helper to clean up previous group posts
 async function deletePreviousGroupPosts(tgBotInstance, targetChatId) {
   if (lastGroupMessageIds.length > 0) {
     for (const msgId of lastGroupMessageIds) {
@@ -94,13 +94,13 @@ async function deletePreviousGroupPosts(tgBotInstance, targetChatId) {
         console.error(`Failed to delete message ${msgId}:`, err.message);
       }
     }
-    lastGroupMessageIds = []; // Reset tracked list after attempting deletion
+    lastGroupMessageIds = [];
   }
 }
 
-// Optimized Batch Dispatcher (Returns array of sent message IDs if tracking is needed)
+// Fixed Batch Dispatcher: 200 numbers/batch with safer delays to prevent rate-limit cuts at 1900
 async function sendFullList(tgBotInstance, targetChatId, trackGroupMessages = false) {
-  const BATCH_SIZE = 100;
+  const BATCH_SIZE = 200; // Expanded batch size to stay under Telegram's message-limit throttle
   const liveDate = getLiveTimestamp();
   const sentMessageIds = [];
 
@@ -124,7 +124,8 @@ async function sendFullList(tgBotInstance, targetChatId, trackGroupMessages = fa
       if (trackGroupMessages && sentMsg) {
         sentMessageIds.push(sentMsg.message_id);
       }
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      // Increased delay to 800ms to safely bypass Telegram API rate limiter
+      await new Promise((resolve) => setTimeout(resolve, 800));
     } catch (err) {
       console.error(`Failed to send batch ${start}-${end}:`, err);
     }
@@ -252,7 +253,6 @@ bot.on('text', async (ctx) => {
   const session = userSessions[userId];
   const text = ctx.message.text.trim();
 
-  // Clear wizard state if user interrupts with a menu button tap
   if (['🔍 Check Number', '🎟️ Reserve Number', '📋 List 3,500 Numbers', '📋 List 3,000 Numbers', '📜 Reserved List', '❌ Release Number', '📊 Lotto Status Chart'].includes(text)) {
     delete userSessions[userId];
     return; 
@@ -328,20 +328,16 @@ bot.on('text', async (ctx) => {
     const reservedCount = Object.keys(lottoDatabase).length;
     if (reservedCount > 0 && reservedCount % 10 === 0) {
       try {
-        // Delete previous milestone posts before sending the new list
         await deletePreviousGroupPosts(bot, TELEGRAM_GROUP_ID);
 
-        // Send announcement and track its message ID
         const announcementMsg = await bot.telegram.sendMessage(
           TELEGRAM_GROUP_ID, 
           `📢 *MILESTONE HIT:* \`${reservedCount}\` tickets sold! Updating group...`, 
           { parse_mode: 'Markdown' }
         );
 
-        // Send the list batches and collect their message IDs
         const newBatchMsgIds = await sendFullList(bot, TELEGRAM_GROUP_ID, true);
 
-        // Store all newly sent message IDs so they can be deleted on the next 10th reservation
         lastGroupMessageIds = [announcementMsg.message_id, ...newBatchMsgIds];
       } catch (groupError) {
         console.error('Group dispatch error:', groupError);
