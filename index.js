@@ -80,7 +80,7 @@ function formatDate(isoString) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Optimized Batch Dispatcher
+// Optimized Batch Dispatcher (Free numbers leave the phone line blank)
 async function sendFullList(tgBotInstance, targetChatId) {
   const TOTAL_NUMBERS = 3000;
   const BATCH_SIZE = 100;
@@ -97,7 +97,7 @@ async function sendFullList(tgBotInstance, targetChatId) {
         const hiddenPhone = phone.length > 2 ? phone.slice(0, -2) + 'XX' : 'XX';
         batchText += `🔴 *${numStr}* ⏩ \`${hiddenPhone}\` >>> ✅\n`;
       } else {
-        batchText += `🟢 *${numStr}* ⏩ \`⚡ Available\` ✨\n`;
+        batchText += `🟢 *${numStr}* ⏩\n`;
       }
     }
 
