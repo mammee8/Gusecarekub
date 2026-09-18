@@ -328,16 +328,26 @@ bot.on('text', async (ctx) => {
 
   if (session.action === 'RESERVE_STEP_ADDRESS') {
     const target = session.targetNumber;
+    const nowISO = new Date().toISOString();
+
     lottoDatabase[target] = {
       name: session.name,
       phone: session.phone,
       address: escapeMarkdown(text),
-      timestamp: new Date().toISOString()
+      timestamp: nowISO
     };
     saveDatabase();
     delete userSessions[userId];
 
-    ctx.reply(`🎉 *BOOKING CONCLUDED!* Ticket *#${target}* secured for *${session.name}*!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
+    // Response formatted in Reserved List style
+    const reservationConfirmation = `Reserved successfully 🟢\n\n` +
+                                    `🎟️ *Ticket #${target}*\n` +
+                                    `👤 *Name:* ${session.name}\n` +
+                                    `📞 *Phone:* \`${session.phone}\`\n` +
+                                    `📍 *Address:* ${escapeMarkdown(text)}\n` +
+                                    `📅 *Date:* ${formatDate(nowISO)}`;
+
+    ctx.replyWithMarkdown(reservationConfirmation, getMenuKeyboard(userId));
 
     const reservedCount = Object.keys(lottoDatabase).length;
     if (reservedCount > 0 && reservedCount % 10 === 0) {
