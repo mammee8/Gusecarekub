@@ -116,8 +116,9 @@ async function sendFullList(tgBotInstance, targetChatId) {
 
 bot.start((ctx) => {
   const userId = ctx.from.id;
-  const greetingText = `🏎️💨 *WELCOME TO THE PREMIUM CAR LOTTERY SYSTEM* 💨🏎️\n\n` +
-                       `✨ _Tap a command tab below to interact with the system:_ ✨`;
+  const greetingText = `Welcome to Guse Car Ekub\n` +
+                       `እንኳን ወደ ጉሴ የመኪና እጣ በሰላም መጡ\n` +
+                       `Baga Gara uqqubi konkolaata Gusetti Nagayaan Dhuftani`;
   
   // Force keyboard refresh on start
   ctx.replyWithMarkdown(greetingText, getMenuKeyboard(userId));
