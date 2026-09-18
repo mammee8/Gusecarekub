@@ -7,7 +7,7 @@ const path = require('path');
 // CONFIGURATION & ADMIN SETUP
 // ==========================================
 const TELEGRAM_GROUP_ID = process.env.TELEGRAM_GROUP_ID || '-5348442720';
-const TOTAL_LOTTO_NUMBERS = 3500; // EXPANDED TO 3,500
+const TOTAL_LOTTO_NUMBERS = 3500;
 
 // CONFIGURED ADMIN TELEGRAM USER IDs
 const ADMIN_IDS = [
@@ -36,18 +36,7 @@ if (fs.existsSync(DATA_FILE)) {
 
 function saveDatabase() {
   try {
-    const tempPath = `${DATA_FILE}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(lottoDatabase, null, 2));
-    fs.renameSync(tempPath, DATA_FILE);
-  } catch (err) {
-    console.error('Failed to save database:', err);
-  }
-}
-
-function getLiveTimestamp() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `[${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}]`;
+    const tempPath = `${DATA_FILE}.tmp`;     fs.writeFileSync(tempPath, JSON.stringify(lottoDatabase, null, 2));     fs.renameSync(tempPath, DATA_FILE);   } catch (err) {     console.error('Failed to save database:', err);   } }  function getLiveTimestamp() {   const d = new Date();   const pad = (n) => String(n).padStart(2, '0');   return `[${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}]`;
 }
 
 // 2. TELEGRAM BOT ENGINE
@@ -81,7 +70,7 @@ function formatDate(isoString) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Optimized Batch Dispatcher (Outputs up to 3,500)
+// Optimized Batch Dispatcher
 async function sendFullList(tgBotInstance, targetChatId) {
   const BATCH_SIZE = 100;
   const liveDate = getLiveTimestamp();
@@ -125,7 +114,7 @@ bot.start((ctx) => {
 
 bot.hears('🔍 Check Number', (ctx) => {
   userSessions[ctx.from.id] = { action: 'CHECK_NUMBER' };
-  ctx.reply(`🔎 *Scanning Input...* Please type the Number you want to check (1-${TOTAL_LOTTO_NUMBERS}):`, getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  ctx.reply('Enter number', getMenuKeyboard(ctx.from.id));
 });
 
 bot.hears('🎟️ Reserve Number', (ctx) => {
@@ -245,12 +234,13 @@ bot.on('text', async (ctx) => {
     return ctx.reply(`⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and ${TOTAL_LOTTO_NUMBERS}. Session cleared.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
+  // CHECK NUMBER RESPONSE UPDATED HERE
   if (session.action === 'CHECK_NUMBER') {
     delete userSessions[userId];
     if (lottoDatabase[text]) {
-      return ctx.reply(`🔒 *STATUS CHECK:* Number *${text}* is already *TAKEN & LOCKED*!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
+      return ctx.reply(`Number ${text} is TAKEN 🔴`, getMenuKeyboard(userId));
     }
-    return ctx.reply(`⚡ *STATUS CHECK:* Number *${text}* is 🌟 *AVAILABLE NOW* 🌟!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
+    return ctx.reply(`Number ${text} is AVAILABLE 🟢`, getMenuKeyboard(userId));
   }
 
   if ((session.action === 'RELEASE_NUMBER' || session.action.startsWith('RESERVE_STEP')) && !isAdmin(userId)) {
