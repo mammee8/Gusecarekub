@@ -9,6 +9,9 @@ const path = require('path');
 const TELEGRAM_GROUP_ID = process.env.TELEGRAM_GROUP_ID || '-5348442720';
 const TOTAL_LOTTO_NUMBERS = 3500;
 
+// Track message IDs sent to the group so we can delete them on the next update
+let lastGroupMessageIds = [];
+
 // CONFIGURED ADMIN TELEGRAM USER IDs
 const ADMIN_IDS = [
   641735093,  // Admin 1
@@ -36,7 +39,18 @@ if (fs.existsSync(DATA_FILE)) {
 
 function saveDatabase() {
   try {
-    const tempPath = `${DATA_FILE}.tmp`;     fs.writeFileSync(tempPath, JSON.stringify(lottoDatabase, null, 2));     fs.renameSync(tempPath, DATA_FILE);   } catch (err) {     console.error('Failed to save database:', err);   } }  function getLiveTimestamp() {   const d = new Date();   const pad = (n) => String(n).padStart(2, '0');   return `[${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}]`;
+    const tempPath = `${DATA_FILE}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(lottoDatabase, null, 2));
+    fs.renameSync(tempPath, DATA_FILE);
+  } catch (err) {
+    console.error('Failed to save database:', err);
+  }
+}
+
+function getLiveTimestamp() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `[${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}]`;
 }
 
 // 2. TELEGRAM BOT ENGINE
@@ -70,10 +84,25 @@ function formatDate(isoString) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Optimized Batch Dispatcher
-async function sendFullList(tgBotInstance, targetChatId) {
+// Helper to clean up previous group posts before posting new list
+async function deletePreviousGroupPosts(tgBotInstance, targetChatId) {
+  if (lastGroupMessageIds.length > 0) {
+    for (const msgId of lastGroupMessageIds) {
+      try {
+        await tgBotInstance.telegram.deleteMessage(targetChatId, msgId);
+      } catch (err) {
+        console.error(`Failed to delete message ${msgId}:`, err.message);
+      }
+    }
+    lastGroupMessageIds = []; // Reset tracked list after attempting deletion
+  }
+}
+
+// Optimized Batch Dispatcher (Returns array of sent message IDs if tracking is needed)
+async function sendFullList(tgBotInstance, targetChatId, trackGroupMessages = false) {
   const BATCH_SIZE = 100;
   const liveDate = getLiveTimestamp();
+  const sentMessageIds = [];
 
   for (let start = 1; start <= TOTAL_LOTTO_NUMBERS; start += BATCH_SIZE) {
     const end = Math.min(start + BATCH_SIZE - 1, TOTAL_LOTTO_NUMBERS);
@@ -91,12 +120,17 @@ async function sendFullList(tgBotInstance, targetChatId) {
     }
 
     try {
-      await tgBotInstance.telegram.sendMessage(targetChatId, batchText, { parse_mode: 'Markdown' });
+      const sentMsg = await tgBotInstance.telegram.sendMessage(targetChatId, batchText, { parse_mode: 'Markdown' });
+      if (trackGroupMessages && sentMsg) {
+        sentMessageIds.push(sentMsg.message_id);
+      }
       await new Promise((resolve) => setTimeout(resolve, 350));
     } catch (err) {
       console.error(`Failed to send batch ${start}-${end}:`, err);
     }
   }
+
+  return sentMessageIds;
 }
 
 // ==========================================
@@ -234,7 +268,6 @@ bot.on('text', async (ctx) => {
     return ctx.reply(`⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and ${TOTAL_LOTTO_NUMBERS}. Session cleared.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
-  // CHECK NUMBER RESPONSE UPDATED HERE
   if (session.action === 'CHECK_NUMBER') {
     delete userSessions[userId];
     if (lottoDatabase[text]) {
@@ -295,8 +328,21 @@ bot.on('text', async (ctx) => {
     const reservedCount = Object.keys(lottoDatabase).length;
     if (reservedCount > 0 && reservedCount % 10 === 0) {
       try {
-        await bot.telegram.sendMessage(TELEGRAM_GROUP_ID, `📢 *MILESTONE HIT:* \`${reservedCount}\` tickets sold! Updating group...`, { parse_mode: 'Markdown' });
-        await sendFullList(bot, TELEGRAM_GROUP_ID);
+        // Delete previous milestone posts before sending the new list
+        await deletePreviousGroupPosts(bot, TELEGRAM_GROUP_ID);
+
+        // Send announcement and track its message ID
+        const announcementMsg = await bot.telegram.sendMessage(
+          TELEGRAM_GROUP_ID, 
+          `📢 *MILESTONE HIT:* \`${reservedCount}\` tickets sold! Updating group...`, 
+          { parse_mode: 'Markdown' }
+        );
+
+        // Send the list batches and collect their message IDs
+        const newBatchMsgIds = await sendFullList(bot, TELEGRAM_GROUP_ID, true);
+
+        // Store all newly sent message IDs so they can be deleted on the next 10th reservation
+        lastGroupMessageIds = [announcementMsg.message_id, ...newBatchMsgIds];
       } catch (groupError) {
         console.error('Group dispatch error:', groupError);
       }
