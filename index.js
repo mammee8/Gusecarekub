@@ -267,7 +267,7 @@ bot.on('text', async (ctx) => {
     return ctx.reply(`⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and ${TOTAL_LOTTO_NUMBERS}. Session cleared.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
-  // CHECK NUMBER logic updated to reveal customer name for Admins
+  // CHECK NUMBER logic: admins get name and full phone number
   if (session.action === 'CHECK_NUMBER') {
     delete userSessions[userId];
     const entry = lottoDatabase[text];
@@ -275,7 +275,8 @@ bot.on('text', async (ctx) => {
     if (entry) {
       if (isAdmin(userId)) {
         const customerName = entry.name || 'Unknown';
-        return ctx.reply(`Number ${text} is TAKEN 🔴 by ${customerName}`, getMenuKeyboard(userId));
+        const customerPhone = entry.phone || 'N/A';
+        return ctx.reply(`Number ${text} is TAKEN 🔴 by ${customerName} (Phone: ${customerPhone})`, getMenuKeyboard(userId));
       }
       return ctx.reply(`Number ${text} is TAKEN 🔴`, getMenuKeyboard(userId));
     }
