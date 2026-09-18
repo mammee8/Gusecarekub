@@ -8,16 +8,15 @@ const path = require('path');
 // ==========================================
 const TELEGRAM_GROUP_ID = process.env.TELEGRAM_GROUP_ID || '-5348442720';
 
-// ADD ALL ADMIN TELEGRAM USER IDs HERE
+// CONFIGURED ADMIN TELEGRAM USER IDs
 const ADMIN_IDS = [
-  1171399514, // Admin 1
-  641735093, // Admin 2
-  761311225, // Admin 3
-  333333333, // Admin 4
-  444444444  // Admin 5 (Add as many IDs as you need)
+  641735093,  // Admin 1
+  761311225,  // Admin 2
+  1171399514  // Admin 3
 ];
 
 function isAdmin(userId) {
+  if (!userId) return false;
   return ADMIN_IDS.includes(Number(userId));
 }
 
@@ -54,7 +53,7 @@ function getLiveTimestamp() {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const userSessions = {};
 
-// Admin Keyboard layout (Full Access to All Tabs)
+// Admin Keyboard layout (Full Access to All 6 Tabs)
 const adminKeyboard = Markup.keyboard([
   ['🔍 Check Number', '🎟️ Reserve Number'],
   ['📋 List 3,000 Numbers', '📜 Reserved List'],
@@ -116,9 +115,12 @@ async function sendFullList(tgBotInstance, targetChatId) {
 // ==========================================
 
 bot.start((ctx) => {
+  const userId = ctx.from.id;
   const greetingText = `🏎️💨 *WELCOME TO THE PREMIUM CAR LOTTERY SYSTEM* 💨🏎️\n\n` +
                        `✨ _Tap a command tab below to interact with the system:_ ✨`;
-  ctx.replyWithMarkdown(greetingText, getMenuKeyboard(ctx.from.id));
+  
+  // Force keyboard refresh on start
+  ctx.replyWithMarkdown(greetingText, getMenuKeyboard(userId));
 });
 
 bot.hears('🔍 Check Number', (ctx) => {
@@ -252,7 +254,6 @@ bot.on('text', async (ctx) => {
     return ctx.reply(`⚡ *STATUS CHECK:* Number *${text}* is 🌟 *AVAILABLE NOW* 🌟!`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
-  // Authorize sensitive wizard steps against the list of admin IDs
   if ((session.action === 'RELEASE_NUMBER' || session.action.startsWith('RESERVE_STEP')) && !isAdmin(userId)) {
     delete userSessions[userId];
     return ctx.reply('⛔ *ACCESS DENIED:* Unauthorized action attempt.', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
