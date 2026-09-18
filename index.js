@@ -98,9 +98,9 @@ async function deletePreviousGroupPosts(tgBotInstance, targetChatId) {
   }
 }
 
-// Fixed Batch Dispatcher: 200 numbers/batch with safer delays to prevent rate-limit cuts at 1900
+// Fixed Batch Dispatcher
 async function sendFullList(tgBotInstance, targetChatId, trackGroupMessages = false) {
-  const BATCH_SIZE = 200; // Expanded batch size to stay under Telegram's message-limit throttle
+  const BATCH_SIZE = 200;
   const liveDate = getLiveTimestamp();
   const sentMessageIds = [];
 
@@ -124,7 +124,6 @@ async function sendFullList(tgBotInstance, targetChatId, trackGroupMessages = fa
       if (trackGroupMessages && sentMsg) {
         sentMessageIds.push(sentMsg.message_id);
       }
-      // Increased delay to 800ms to safely bypass Telegram API rate limiter
       await new Promise((resolve) => setTimeout(resolve, 800));
     } catch (err) {
       console.error(`Failed to send batch ${start}-${end}:`, err);
@@ -268,11 +267,19 @@ bot.on('text', async (ctx) => {
     return ctx.reply(`⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and ${TOTAL_LOTTO_NUMBERS}. Session cleared.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
+  // CHECK NUMBER logic updated to reveal customer name for Admins
   if (session.action === 'CHECK_NUMBER') {
     delete userSessions[userId];
-    if (lottoDatabase[text]) {
+    const entry = lottoDatabase[text];
+
+    if (entry) {
+      if (isAdmin(userId)) {
+        const customerName = entry.name || 'Unknown';
+        return ctx.reply(`Number ${text} is TAKEN 🔴 by ${customerName}`, getMenuKeyboard(userId));
+      }
       return ctx.reply(`Number ${text} is TAKEN 🔴`, getMenuKeyboard(userId));
     }
+
     return ctx.reply(`Number ${text} is AVAILABLE 🟢`, getMenuKeyboard(userId));
   }
 
