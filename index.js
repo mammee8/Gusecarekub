@@ -12,7 +12,7 @@ const TELEGRAM_GROUP_ID = process.env.TELEGRAM_GROUP_ID || '-5348442720';
 const ADMIN_IDS = [
   1171399514, // Admin 1
   641735093, // Admin 2
-  5348442720, // Admin 3
+  761311225, // Admin 3
   333333333, // Admin 4
   444444444  // Admin 5 (Add as many IDs as you need)
 ];
