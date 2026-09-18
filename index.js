@@ -267,16 +267,22 @@ bot.on('text', async (ctx) => {
     return ctx.reply(`⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and ${TOTAL_LOTTO_NUMBERS}. Session cleared.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
-  // CHECK NUMBER logic: admins get name and full phone number
+  // CHECK NUMBER logic formatted as Reserved List card for Admins
   if (session.action === 'CHECK_NUMBER') {
     delete userSessions[userId];
     const entry = lottoDatabase[text];
 
     if (entry) {
       if (isAdmin(userId)) {
-        const customerName = entry.name || 'Unknown';
-        const customerPhone = entry.phone || 'N/A';
-        return ctx.reply(`Number ${text} is TAKEN 🔴 by ${customerName} (Phone: ${customerPhone})`, getMenuKeyboard(userId));
+        const formattedDate = formatDate(entry.timestamp);
+        const adminDetailsText = `🔴 *Number ${text} is TAKEN*\n\n` +
+                                 `🎟️ *Ticket #${text}*\n` +
+                                 `👤 *Name:* ${entry.name || 'N/A'}\n` +
+                                 `📞 *Phone:* \`${entry.phone || 'N/A'}\`\n` +
+                                 `📍 *Address:* ${entry.address || 'N/A'}\n` +
+                                 `📅 *Date:* ${formattedDate}`;
+
+        return ctx.replyWithMarkdown(adminDetailsText, getMenuKeyboard(userId));
       }
       return ctx.reply(`Number ${text} is TAKEN 🔴`, getMenuKeyboard(userId));
     }
