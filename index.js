@@ -7,6 +7,7 @@ const path = require('path');
 // CONFIGURATION & ADMIN SETUP
 // ==========================================
 const TELEGRAM_GROUP_ID = process.env.TELEGRAM_GROUP_ID || '-5348442720';
+const TOTAL_LOTTO_NUMBERS = 3500; // EXPANDED TO 3,500
 
 // CONFIGURED ADMIN TELEGRAM USER IDs
 const ADMIN_IDS = [
@@ -56,13 +57,13 @@ const userSessions = {};
 // Admin Keyboard layout (Full Access to All 6 Tabs)
 const adminKeyboard = Markup.keyboard([
   ['🔍 Check Number', '🎟️ Reserve Number'],
-  ['📋 List 3,000 Numbers', '📜 Reserved List'],
+  ['📋 List 3,500 Numbers', '📜 Reserved List'],
   ['❌ Release Number', '📊 Lotto Status Chart']
 ]).resize();
 
 // Public/Individual User Keyboard layout (Restricted Access)
 const userKeyboard = Markup.keyboard([
-  ['🔍 Check Number', '📋 List 3,000 Numbers']
+  ['🔍 Check Number', '📋 List 3,500 Numbers']
 ]).resize();
 
 function getMenuKeyboard(userId) {
@@ -80,14 +81,13 @@ function formatDate(isoString) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Optimized Batch Dispatcher (Free numbers leave the phone line blank)
+// Optimized Batch Dispatcher (Outputs up to 3,500)
 async function sendFullList(tgBotInstance, targetChatId) {
-  const TOTAL_NUMBERS = 3000;
   const BATCH_SIZE = 100;
   const liveDate = getLiveTimestamp();
 
-  for (let start = 1; start <= TOTAL_NUMBERS; start += BATCH_SIZE) {
-    const end = Math.min(start + BATCH_SIZE - 1, TOTAL_NUMBERS);
+  for (let start = 1; start <= TOTAL_LOTTO_NUMBERS; start += BATCH_SIZE) {
+    const end = Math.min(start + BATCH_SIZE - 1, TOTAL_LOTTO_NUMBERS);
     let batchText = `💥 *${start} ➡️ ${end}*  🕒 _Generated: ${liveDate}_\n\n`;
 
     for (let i = start; i <= end; i++) {
@@ -120,13 +120,12 @@ bot.start((ctx) => {
                        `እንኳን ወደ ጉሴ የመኪና እጣ በሰላም መጡ\n` +
                        `Baga Gara uqqubi konkolaata Gusetti Nagayaan Dhuftani`;
   
-  // Force keyboard refresh on start
   ctx.replyWithMarkdown(greetingText, getMenuKeyboard(userId));
 });
 
 bot.hears('🔍 Check Number', (ctx) => {
   userSessions[ctx.from.id] = { action: 'CHECK_NUMBER' };
-  ctx.reply('🔎 *Scanning Input...* Please type the Number you want to check (1-3000):', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  ctx.reply(`🔎 *Scanning Input...* Please type the Number you want to check (1-${TOTAL_LOTTO_NUMBERS}):`, getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
 });
 
 bot.hears('🎟️ Reserve Number', (ctx) => {
@@ -134,10 +133,10 @@ bot.hears('🎟️ Reserve Number', (ctx) => {
     return ctx.reply('⛔ *ACCESS DENIED:* Only system administrators can reserve numbers.', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
   }
   userSessions[ctx.from.id] = { action: 'RESERVE_STEP_NUMBER' };
-  ctx.reply('🛠️ *Booking Configuration started.*\n\n🚩 *Step [1 / 4]:* Enter the desired Number (1-3000):', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  ctx.reply(`🛠️ *Booking Configuration started.*\n\n🚩 *Step [1 / 4]:* Enter the desired Number (1-${TOTAL_LOTTO_NUMBERS}):`, getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
 });
 
-bot.hears('📋 List 3,000 Numbers', async (ctx) => {
+bot.hears(['📋 List 3,500 Numbers', '📋 List 3,000 Numbers'], async (ctx) => {
   const processMsg = await ctx.reply('⏳ *Initializing live layout engine...* 0%');
   
   setTimeout(() => ctx.telegram.editMessageText(ctx.chat.id, processMsg.message_id, null, '⚡ *Processing database entities...* 50%', { parse_mode: 'Markdown' }).catch(() => {}), 400);
@@ -145,7 +144,7 @@ bot.hears('📋 List 3,000 Numbers', async (ctx) => {
 
   await new Promise((resolve) => setTimeout(resolve, 850));
   await sendFullList(bot, ctx.chat.id);
-  ctx.reply('🏁 *All 3,000 entries have been mapped.* 🔥', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
+  ctx.reply(`🏁 *All ${TOTAL_LOTTO_NUMBERS.toLocaleString()} entries have been mapped.* 🔥`, getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
 });
 
 bot.hears('📜 Reserved List', async (ctx) => {
@@ -203,10 +202,9 @@ bot.hears('📊 Lotto Status Chart', (ctx) => {
     return ctx.reply('⛔ *ACCESS DENIED:* Only system administrators can view metrics.', getMenuKeyboard(ctx.from.id), { parse_mode: 'Markdown' });
   }
 
-  const totalNumbers = 3000;
   const reservedCount = Object.keys(lottoDatabase).length;
-  const availableCount = totalNumbers - reservedCount;
-  const percentage = Math.round((reservedCount / totalNumbers) * 100);
+  const availableCount = TOTAL_LOTTO_NUMBERS - reservedCount;
+  const percentage = Math.round((reservedCount / TOTAL_LOTTO_NUMBERS) * 100);
 
   const progressBarLength = 10;
   const filledBlocks = Math.round((percentage / 100) * progressBarLength);
@@ -217,7 +215,7 @@ bot.hears('📊 Lotto Status Chart', (ctx) => {
                      `⚡ Progress: |${chartBar}| *${percentage}% Completed*\n\n` +
                      `🔴 Total Sold: *${reservedCount} Slots*\n` +
                      `🟢 Total Vacant: *${availableCount} Slots*\n` +
-                     `💎 Pool Size: *${totalNumbers} Options*`;
+                     `💎 Pool Size: *${TOTAL_LOTTO_NUMBERS} Options*`;
 
   ctx.replyWithMarkdown(statusText, getMenuKeyboard(ctx.from.id));
 });
@@ -232,7 +230,7 @@ bot.on('text', async (ctx) => {
   const text = ctx.message.text.trim();
 
   // Clear wizard state if user interrupts with a menu button tap
-  if (['🔍 Check Number', '🎟️ Reserve Number', '📋 List 3,000 Numbers', '📜 Reserved List', '❌ Release Number', '📊 Lotto Status Chart'].includes(text)) {
+  if (['🔍 Check Number', '🎟️ Reserve Number', '📋 List 3,500 Numbers', '📋 List 3,000 Numbers', '📜 Reserved List', '❌ Release Number', '📊 Lotto Status Chart'].includes(text)) {
     delete userSessions[userId];
     return; 
   }
@@ -242,9 +240,9 @@ bot.on('text', async (ctx) => {
   const numCheck = parseInt(text, 10);
   const requiresValidNum = ['CHECK_NUMBER', 'RESERVE_STEP_NUMBER', 'RELEASE_NUMBER'].includes(session.action);
 
-  if (requiresValidNum && (isNaN(numCheck) || numCheck < 1 || numCheck > 3000)) {
+  if (requiresValidNum && (isNaN(numCheck) || numCheck < 1 || numCheck > TOTAL_LOTTO_NUMBERS)) {
     delete userSessions[userId];
-    return ctx.reply('⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and 3000. Session cleared.', getMenuKeyboard(userId), { parse_mode: 'Markdown' });
+    return ctx.reply(`⚠️ *ALERT: Invalid Number!* Inputs must fall between 1 and ${TOTAL_LOTTO_NUMBERS}. Session cleared.`, getMenuKeyboard(userId), { parse_mode: 'Markdown' });
   }
 
   if (session.action === 'CHECK_NUMBER') {
